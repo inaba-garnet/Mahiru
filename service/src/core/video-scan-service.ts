@@ -1,6 +1,7 @@
 import { DetectedVideoFile } from './scanner'
 import { FFProbeService, FFProbeResult } from './ffmpeg/ffprobe-service'
 import { ProgramInfoService } from './metadata/program-info-service'
+import { VideoRepository } from '../db/repositories/video-repository'
 
 /**
  * FFPROBEで取得した動画メタデータ
@@ -107,32 +108,8 @@ export class VideoScanService {
     // 2. 番組情報（.program.txt）を取得
     const programInfo = await this.getProgramInfo(filePath)
 
-    // 3. DBに保存（未実装のため一時的にコメントアウト）
-    // TODO: Repository層の実装後に有効化
-    // await this.saveToDatabase({
-    //   path: filePath,
-    //   filename,
-    //   size: fileSize,
-    //   ffprobeMetadata: {
-    //     duration: ffprobeResult.duration,
-    //     videoCodec: ffprobeResult.videoCodec,
-    //     audioCodec: ffprobeResult.audioCodec,
-    //     width: ffprobeResult.width,
-    //     height: ffprobeResult.height,
-    //     frameRate: ffprobeResult.frameRate
-    //   },
-    //   programInfo,
-    //   keyframeData: {
-    //     timestamps: ffprobeResult.keyframes
-    //   },
-    //   chapterData: ffprobeResult.chapters.map((chapter) => ({
-    //     title: chapter.title,
-    //     startTime: chapter.startTime,
-    //     endTime: chapter.endTime
-    //   }))
-    // })
-
-    return {
+    // 3. スキャン結果を構築
+    const scanResult: VideoScanResult = {
       path: filePath,
       filename,
       size: fileSize,
@@ -154,6 +131,11 @@ export class VideoScanService {
         endTime: chapter.endTime
       }))
     }
+
+    // 4. DBに保存
+    await this.saveToDatabase(scanResult)
+
+    return scanResult
   }
 
   /**
@@ -220,18 +202,11 @@ export class VideoScanService {
    * スキャン結果をDBに保存します。
    * @param result - スキャン結果
    * @throws {Error} DBへの保存に失敗した場合
-   * @internal 将来の実装用。現在は未使用。
    */
-  // @ts-expect-error 将来の実装用のメソッド。現在は未使用だが、実装時に使用する予定。
-  private static async _saveToDatabase(
+  private static async saveToDatabase(
     result: VideoScanResult
   ): Promise<void> {
-    // TODO: Repository層を使用してDBに保存
-    // 1. Video テーブルに保存（または更新）
-    // 2. VideoMetadata テーブルに保存（programInfo が存在する場合）
-    // 3. Keyframe テーブルに保存（keyframeData が存在する場合）
-    // 4. Chapter テーブルに保存（chapterData が存在する場合）
-    throw new Error('未実装: VideoScanService._saveToDatabase')
+    await VideoRepository.saveScanResult(result)
   }
 }
 
