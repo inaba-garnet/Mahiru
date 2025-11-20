@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ------------------------------------------------------
+// Models
+// ------------------------------------------------------
+
+// 動画ファイル自体の情報
+model Video {
+  id          String   @id @default(uuid())
+  path        String   @unique // ファイルパス（絶対パス）
+  filename    String
+  duration    Float    // 動画の長さ（秒）
+  size        BigInt   // ファイルサイズ（バイト）
+  
+  // コーデック情報 (ffprobe由来)
+  videoCodec  String   @map("video_codec")
+  audioCodec  String   @map("audio_codec")
+  width       Int?
+  height      Int?
+  frameRate   Float?   @map("frame_rate")
+
+
+  // リレーション
+  metadata    VideoMetadata?
+  chapters    Chapter[]
+  keyframes   Keyframe[]
+  seriesId    String?  @map("series_id")
+  series      Series?  @relation(fields: [seriesId], references: [id])
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("videos")
+}
+
+// 番組情報メタデータ (.program.txt由来)
+model VideoMetadata {
+  id          String   @id @default(uuid())
+  videoId     String   @unique @map("video_id")
+  video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  originalTitle String  @map("original_title") // メタデータ由来のタイトル 
+  title       String?   // 番組名
+  episode     String?  // 話数表示
+  description String?  // 番組内容詳細
+  genre       String?  // ジャンル
+  channelName String?  @map("channel_name")
+  onAirDate   DateTime? @map("on_air_date")
+
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("video_metadata")
+}
+
+// キーフレーム情報 (ストリームコピー判定用、1動画1レコードに集約)
+// timestamps: キーフレーム位置（秒）配列をJSONとして格納
+model Keyframe {
+  id         String   @id @default(uuid())
+  videoId    String   @unique @map("video_id")
+  video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  timestamps Json     // キーフレーム位置リスト（秒単位, float[]）
+
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("keyframes")
+}
+
+// シリーズ情報 (番組名でグルーピング)
+model Series {
+  id        String   @id @default(uuid())
+  title     String   @unique
+
+  videos    Video[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("series")
+}
+
+// チャプター情報（1動画に複数チャプターが紐づく）
+model Chapter {
+  id          String   @id @default(uuid())
+  videoId     String   @map("video_id")
+  video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  title       String?  // チャプタータイトル（例: オープニング, エンディング等）
+  startTime   Float    @map("start_time") // 開始時刻（秒単位, 小数点可）
+  endTime     Float?   @map("end_time")   // 終了時刻（省略可：未入力は動画末尾まで）
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("chapters")
+  @@index([videoId])
+}
