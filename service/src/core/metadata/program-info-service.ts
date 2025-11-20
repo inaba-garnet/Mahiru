@@ -108,8 +108,15 @@ export class ProgramInfoService {
     }
     if (titleParts.length > 0) {
       const title = titleParts.join('\n')
-      programInfo.title = this.convertToHalfWidth(title)
-      programInfo.originalTitle = this.convertToHalfWidth(title)
+      const convertedTitle = this.convertToHalfWidth(title)
+      programInfo.title = convertedTitle
+      programInfo.originalTitle = convertedTitle
+
+      // 話数を抽出
+      const episode = this.extractEpisode(convertedTitle)
+      if (episode) {
+        programInfo.episode = episode
+      }
     }
 
     // 「詳細情報」から始まる行の分を取得
@@ -163,10 +170,24 @@ export class ProgramInfoService {
     const filenameInfo = this.extractInfoFromFilename(videoFilePath)
     if (!programInfo.title && filenameInfo?.title) {
       programInfo.title = filenameInfo.title
+      // ファイル名からも話数を抽出
+      if (!programInfo.episode) {
+        const episode = this.extractEpisode(filenameInfo.title)
+        if (episode) {
+          programInfo.episode = episode
+        }
+      }
     }
     if (!programInfo.originalTitle && filenameInfo?.originalTitle) {
       programInfo.originalTitle = filenameInfo.originalTitle
     }
+
+    // シリーズ検出（今は実装しないが、null出力できるように準備）
+    // TODO: シリーズ検出ロジックを実装
+    // 現在は常にnullを返すが、将来の実装のために呼び出しを残す
+    void this.detectSeries(programInfo)
+    // const seriesId = this.detectSeries(programInfo)
+    // programInfo.seriesId = seriesId // 将来的に使用する際はコメントを外す
 
     return programInfo
   }
@@ -222,6 +243,44 @@ export class ProgramInfoService {
       title: this.convertToHalfWidth(filename),
       originalTitle: this.convertToHalfWidth(filename)
     }
+  }
+
+  /**
+   * 番組名から話数を抽出します。
+   * 「第○○話」や「#○○(数字)」の形式を検出します。
+   * @param title - 番組名
+   * @returns 話数文字列（見つからない場合は undefined）
+   */
+  private static extractEpisode(title: string): string | undefined {
+    // 「第○○話」の形式を検出（全角・半角数字に対応）
+    // 例: 「第15話」「第１５話」「第1話」など
+    const daiMatch = title.match(/第([0-9０-９]+)話/)
+    if (daiMatch) {
+      // 全角数字を半角に変換
+      const episodeNum = this.convertToHalfWidth(daiMatch[1] ?? '')
+      return `第${episodeNum}話`
+    }
+
+    // 「#○○(数字)」の形式を検出
+    // 例: 「#15」「#1」など
+    const hashMatch = title.match(/#([0-9]+)/)
+    if (hashMatch) {
+      return `#${hashMatch[1]}`
+    }
+
+    return undefined
+  }
+
+  /**
+   * シリーズを検出します。
+   * 今は実装せず、nullを返すだけです。
+   * @param programInfo - 番組情報
+   * @returns シリーズID（今は常に null）
+   */
+  private static detectSeries(programInfo: ProgramInfo): string | null {
+    // TODO: シリーズ検出ロジックを実装
+    // 番組名からシリーズ名を抽出し、DBからシリーズを検索する
+    return null
   }
 
   /**
