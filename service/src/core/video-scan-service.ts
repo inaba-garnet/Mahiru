@@ -1,5 +1,6 @@
 import { DetectedVideoFile } from './scanner'
 import { FFProbeService, FFProbeResult } from './ffmpeg/ffprobe-service'
+import { ProgramInfoService } from './metadata/program-info-service'
 
 /**
  * FFPROBEで取得した動画メタデータ
@@ -210,9 +211,7 @@ export class VideoScanService {
   private static async getProgramInfo(
     filePath: string
   ): Promise<ProgramInfo | undefined> {
-    // TODO: program-info-service.ts の呼び出し
-    // 番組情報が存在しない場合は undefined を返す
-    return undefined
+    return ProgramInfoService.getProgramInfo(filePath)
   }
 
 

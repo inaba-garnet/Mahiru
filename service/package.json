@@ -9,6 +9,7 @@
   "scripts": {
     "test": "npm run build:ts && tsc -p test/tsconfig.json && c8 node --test -r ts-node/register \"test/**/*.ts\"",
     "test:ffprobe": "ts-node test/ffprobe-service.test.ts",
+    "test:program-info": "ts-node test/program-info-service.test.ts",
     "start": "npm run build:ts && fastify start -l info dist/api/app.js",
     "build:ts": "tsc",
     "watch:ts": "tsc -w",
