@@ -78,3 +78,19 @@ src/
 └── utils/           # ユーティリティ関数
 ```
 
+## 7. Git Commit Guidelines
+
+コミットメッセージを生成または提案する場合は、以下のルールに従ってください。
+
+1.  **Format:** `type(scope): subject` の形式を使用すること。
+2.  **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore` から適切なものを選択すること。
+3.  **Subject:** 日本語で記述し、「～を追加」「～を修正」のように簡潔に終わらせること。
+4.  **Scope:** 変更箇所が明確な場合（例: `api`, `db`, `player`）は記述すること。
+
+**良い例:**
+- `feat(core): FFmpegのトランスコード処理にタイムアウトを追加`
+- `fix(db): 録画データのスキャン時に重複登録されるバグを修正`
+
+**悪い例:**
+- `Update logic` (具体性がない)
+- `FFmpegの処理を修正しました。` (Typeがない、冗長)
