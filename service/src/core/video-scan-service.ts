@@ -1,7 +1,9 @@
 import { DetectedVideoFile } from './scanner'
+import { FFProbeService, FFProbeResult } from './ffmpeg/ffprobe-service'
 
 /**
  * FFPROBEで取得した動画メタデータ
+ * @deprecated 新しいコードでは FFProbeResult を直接使用してください
  */
 export interface FFProbeMetadata {
   /** 動画の長さ（秒） */
@@ -98,37 +100,57 @@ export class VideoScanService {
     fileSize: number,
     filename: string
   ): Promise<VideoScanResult> {
-    // 1. FFPROBEで動画メタデータを取得
-    const ffprobeMetadata = await this.getFFProbeMetadata(filePath)
+    // 1. FFPROBEで動画メタデータ・キーフレーム・チャプター情報を取得
+    const ffprobeResult = await this.getFFProbeMetadata(filePath)
 
     // 2. 番組情報（.program.txt）を取得
     const programInfo = await this.getProgramInfo(filePath)
 
-    // 3. キーフレームデータを取得
-    const keyframeData = await this.getKeyframeData(filePath)
-
-    // 4. チャプターデータを取得
-    const chapterData = await this.getChapterData(filePath)
-
-    // 5. DBに保存
+    // 3. DBに保存
     await this.saveToDatabase({
       path: filePath,
       filename,
       size: fileSize,
-      ffprobeMetadata,
+      ffprobeMetadata: {
+        duration: ffprobeResult.duration,
+        videoCodec: ffprobeResult.videoCodec,
+        audioCodec: ffprobeResult.audioCodec,
+        width: ffprobeResult.width,
+        height: ffprobeResult.height,
+        frameRate: ffprobeResult.frameRate
+      },
       programInfo,
-      keyframeData,
-      chapterData
+      keyframeData: {
+        timestamps: ffprobeResult.keyframes
+      },
+      chapterData: ffprobeResult.chapters.map((chapter) => ({
+        title: chapter.title,
+        startTime: chapter.startTime,
+        endTime: chapter.endTime
+      }))
     })
 
     return {
       path: filePath,
       filename,
       size: fileSize,
-      ffprobeMetadata,
+      ffprobeMetadata: {
+        duration: ffprobeResult.duration,
+        videoCodec: ffprobeResult.videoCodec,
+        audioCodec: ffprobeResult.audioCodec,
+        width: ffprobeResult.width,
+        height: ffprobeResult.height,
+        frameRate: ffprobeResult.frameRate
+      },
       programInfo,
-      keyframeData,
-      chapterData
+      keyframeData: {
+        timestamps: ffprobeResult.keyframes
+      },
+      chapterData: ffprobeResult.chapters.map((chapter) => ({
+        title: chapter.title,
+        startTime: chapter.startTime,
+        endTime: chapter.endTime
+      }))
     }
   }
 
@@ -169,16 +191,15 @@ export class VideoScanService {
   }
 
   /**
-   * FFPROBEサービスを呼び出して動画メタデータを取得します。
+   * FFPROBEサービスを呼び出して動画メタデータ・キーフレーム・チャプター情報を取得します。
    * @param filePath - 動画ファイルの絶対パス
-   * @returns FFPROBEで取得したメタデータ
+   * @returns FFPROBEで取得したメタデータ、キーフレーム、チャプター情報
    * @throws {Error} FFPROBEの実行に失敗した場合
    */
   private static async getFFProbeMetadata(
     filePath: string
-  ): Promise<FFProbeMetadata> {
-    // TODO: ffprobe-service.ts の呼び出し
-    throw new Error('未実装: VideoScanService.getFFProbeMetadata')
+  ): Promise<FFProbeResult> {
+    return FFProbeService.analyzeVideo(filePath)
   }
 
   /**
@@ -194,31 +215,6 @@ export class VideoScanService {
     return undefined
   }
 
-  /**
-   * キーフレームデータを取得します。
-   * @param filePath - 動画ファイルの絶対パス
-   * @returns キーフレームデータ（取得できない場合は undefined）
-   */
-  private static async getKeyframeData(
-    filePath: string
-  ): Promise<KeyframeData | undefined> {
-    // TODO: FFPROBEまたはFFmpegを使用してキーフレーム位置を取得
-    // キーフレームが取得できない場合は undefined を返す
-    return undefined
-  }
-
-  /**
-   * チャプターデータを取得します。
-   * @param filePath - 動画ファイルの絶対パス
-   * @returns チャプターデータの配列（存在しない場合は空配列）
-   */
-  private static async getChapterData(
-    filePath: string
-  ): Promise<ChapterData[]> {
-    // TODO: FFPROBEまたはメタデータからチャプター情報を取得
-    // チャプターが存在しない場合は空配列を返す
-    return []
-  }
 
   /**
    * スキャン結果をDBに保存します。
