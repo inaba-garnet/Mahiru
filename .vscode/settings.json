@@ -1,0 +1,7 @@
+{
+  "prisma.validateAdditionalSources": [],
+  "prisma.ignoreErrors": [
+    "The datasource property `url` is no longer supported in schema files"
+  ]
+}
+
