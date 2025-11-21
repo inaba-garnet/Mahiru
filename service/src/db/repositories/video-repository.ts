@@ -14,10 +14,12 @@ export class VideoRepository {
    * @throws {Error} DBへの保存に失敗した場合
    */
   static async saveScanResult(result: VideoScanResult): Promise<string> {
+    console.log(`[VideoRepository] saveScanResult 開始: ${result.filename}`)
     const prisma = getPrismaClient()
 
     try {
       // トランザクションで一括保存
+      console.log(`[VideoRepository] トランザクション開始`)
       const video = await prisma.$transaction(async (tx) => {
         // 1. Video テーブルに保存（または更新）
         const videoData = {
@@ -32,14 +34,17 @@ export class VideoRepository {
           frameRate: result.ffprobeMetadata?.frameRate ?? null
         }
 
+        console.log(`[VideoRepository] Videoテーブルに保存/更新: ${result.path}`)
         const video = await tx.video.upsert({
           where: { path: result.path },
           update: videoData,
           create: videoData
         })
+        console.log(`[VideoRepository] Videoテーブル保存完了: ID=${video.id}`)
 
         // 2. VideoMetadata テーブルに保存（programInfo が存在する場合）
         if (result.programInfo) {
+          console.log(`[VideoRepository] VideoMetadataテーブルに保存`)
           const metadataData = {
             videoId: video.id,
             originalTitle: result.programInfo.originalTitle ?? result.programInfo.title ?? '',
@@ -56,20 +61,31 @@ export class VideoRepository {
             update: metadataData,
             create: metadataData
           })
+          console.log(`[VideoRepository] VideoMetadataテーブル保存完了`)
+        } else {
+          console.log(`[VideoRepository] VideoMetadataはスキップ（programInfoなし）`)
         }
 
         // 3. Keyframe テーブルに保存（keyframeData が存在する場合）
         if (result.keyframeData && result.keyframeData.timestamps.length > 0) {
+          console.log(
+            `[VideoRepository] Keyframeテーブルに保存: ${result.keyframeData.timestamps.length}個のキーフレーム`
+          )
+          // SQLiteではJSON型がサポートされていないため、JSON文字列として保存
+          const timestampsJson = JSON.stringify(result.keyframeData.timestamps)
           await tx.keyframe.upsert({
             where: { videoId: video.id },
             update: {
-              timestamps: result.keyframeData.timestamps
+              timestamps: timestampsJson
             },
             create: {
               videoId: video.id,
-              timestamps: result.keyframeData.timestamps
+              timestamps: timestampsJson
             }
           })
+          console.log(`[VideoRepository] Keyframeテーブル保存完了`)
+        } else {
+          console.log(`[VideoRepository] Keyframeはスキップ（データなし）`)
         }
 
         // 4. Chapter テーブルに保存（chapterData が存在する場合）
@@ -94,6 +110,13 @@ export class VideoRepository {
 
       return video.id
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorStack = error instanceof Error ? error.stack : undefined
+      console.error(`[VideoRepository] DB保存エラー: ${result.filename}`)
+      console.error(`[VideoRepository] エラー内容: ${errorMessage}`)
+      if (errorStack) {
+        console.error(`[VideoRepository] スタックトレース:`, errorStack)
+      }
       if (error instanceof Error) {
         throw new Error(`DBへの保存に失敗しました: ${error.message}`)
       }

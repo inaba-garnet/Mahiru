@@ -1,6 +1,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getRecordingsDirectory } from '../utils/config'
+import { VideoScanService } from './video-scan-service'
 
 /**
  * 検出された動画ファイルの情報
@@ -31,6 +32,43 @@ export class DirectoryScanner {
    * @throws {Error} ディレクトリが存在しない、または読み取り権限がない場合
    */
   static async scanRecordingsDirectory(
+    recordingsDir?: string
+  ): Promise<DetectedVideoFile[]> {
+    return this.scanFilesOnly(recordingsDir)
+  }
+
+  /**
+   * 録画ディレクトリをスキャンし、検出されたファイルをスキャンしてDBに登録します。
+   * @param recordingsDir - スキャン対象の録画ディレクトリ（指定しない場合は環境変数から取得）
+   * @returns スキャン結果の配列
+   * @throws {Error} ディレクトリが存在しない、または読み取り権限がない場合
+   */
+  static async scanAndRegister(
+    recordingsDir?: string
+  ): Promise<Awaited<ReturnType<typeof VideoScanService.scanVideoFiles>>> {
+    console.log(`[DirectoryScanner] scanAndRegister 開始`)
+    // 1. ファイルを検出
+    console.log(`[DirectoryScanner] ファイル検出を開始...`)
+    const detectedFiles = await this.scanFilesOnly(recordingsDir)
+    console.log(
+      `[DirectoryScanner] ファイル検出完了: ${detectedFiles.length}件のファイルを検出`
+    )
+
+    // 2. 各ファイルをスキャンしてDBに登録
+    console.log(`[DirectoryScanner] VideoScanService.scanVideoFiles を呼び出し`)
+    const results = await VideoScanService.scanVideoFiles(detectedFiles)
+    console.log(`[DirectoryScanner] scanAndRegister 完了`)
+    return results
+  }
+
+  /**
+   * 録画ディレクトリをスキャンし、動画ファイル（.ts, .mp4, .mkv）を検出します。
+   * この関数はディレクトリの走査とファイル検出のみを行い、メタデータの解析は行いません。
+   * @param recordingsDir - スキャン対象の録画ディレクトリ（指定しない場合は環境変数から取得）
+   * @returns 検出された動画ファイルの配列（パス、ファイル名、サイズのみ）
+   * @throws {Error} ディレクトリが存在しない、または読み取り権限がない場合
+   */
+  private static async scanFilesOnly(
     recordingsDir?: string
   ): Promise<DetectedVideoFile[]> {
     const targetDir = recordingsDir ?? getRecordingsDirectory()

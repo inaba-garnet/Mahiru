@@ -1,46 +1,38 @@
 import { FastifyPluginAsync } from 'fastify'
-import { scanRecordingsDirectory } from '../../../core/scanner'
+import { DirectoryScanner } from '../../../core/scanner'
 
 /**
  * 管理用API: 録画ディレクトリのスキャン
+ * ディレクトリをスキャンし、検出されたファイルのスキャンとDB登録をバックグラウンドで実行します。
  */
 const scan: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   fastify.post('/scan', async function (request, reply) {
     try {
-      // 録画ディレクトリをスキャン
-      const detectedFiles = await scanRecordingsDirectory()
-
-      // 検出結果をコンソールに表示
-      console.log('=== 録画ディレクトリスキャン結果 ===')
-      console.log(`検出されたファイル数: ${detectedFiles.length}`)
-      console.log('')
-
-      if (detectedFiles.length === 0) {
-        console.log('動画ファイルは検出されませんでした。')
-      } else {
-        console.log('検出されたファイル一覧:')
-        detectedFiles.forEach((file, index) => {
-          const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
-          console.log(
-            `  [${index + 1}] ${file.filename} (${sizeMB} MB) - ${file.path}`
+      // ディレクトリをスキャンして、検出されたファイルをスキャンしてDB登録
+      // エラーハンドリングはDirectoryScanner内で行われ、個別のファイルのエラーは処理を継続します
+      DirectoryScanner.scanAndRegister()
+        .then((results) => {
+          const successCount = results.filter(
+            (r) => r.ffprobeMetadata !== undefined
+          ).length
+          fastify.log.info(
+            `[Scan API] スキャン完了: ${successCount}/${results.length}件のファイルをDBに登録しました。`
           )
         })
-      }
+        .catch((error) => {
+          fastify.log.error(
+            error,
+            '[Scan API] スキャン処理中に予期しないエラーが発生しました'
+          )
+        })
 
-      console.log('=====================================')
-
-      // レスポンスを返す
-      return {
+      // 即座に206レスポンスを返す
+      return reply.code(206).send({
         success: true,
-        count: detectedFiles.length,
-        files: detectedFiles.map((file) => ({
-          path: file.path,
-          filename: file.filename,
-          size: file.size
-        }))
-      }
+        message: 'スキャン処理を開始しました'
+      })
     } catch (error) {
-      fastify.log.error(error, '録画ディレクトリのスキャン中にエラーが発生しました')
+      fastify.log.error(error, '録画ディレクトリのスキャン開始中にエラーが発生しました')
       return reply.code(500).send({
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'

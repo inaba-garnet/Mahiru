@@ -35,7 +35,7 @@ CREATE TABLE "video_metadata" (
 CREATE TABLE "keyframes" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "video_id" TEXT NOT NULL,
-    "timestamps" JSONB NOT NULL,
+    "timestamps" TEXT NOT NULL,
     "updated_at" DATETIME NOT NULL,
     CONSTRAINT "keyframes_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "videos" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );

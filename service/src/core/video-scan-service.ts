@@ -102,13 +102,29 @@ export class VideoScanService {
     fileSize: number,
     filename: string
   ): Promise<VideoScanResult> {
+    console.log(`[VideoScanService] ファイルのスキャンを開始: ${filename}`)
+    console.log(`[VideoScanService] ファイルパス: ${filePath}`)
+
     // 1. FFPROBEで動画メタデータ・キーフレーム・チャプター情報を取得
+    console.log(`[VideoScanService] FFPROBEメタデータの取得を開始...`)
     const ffprobeResult = await this.getFFProbeMetadata(filePath)
+    console.log(
+      `[VideoScanService] FFPROBEメタデータ取得完了: 長さ=${ffprobeResult.duration.toFixed(2)}秒, コーデック=${ffprobeResult.videoCodec}/${ffprobeResult.audioCodec}, キーフレーム数=${ffprobeResult.keyframes.length}, チャプター数=${ffprobeResult.chapters.length}`
+    )
 
     // 2. 番組情報（.program.txt）を取得
+    console.log(`[VideoScanService] 番組情報の取得を開始...`)
     const programInfo = await this.getProgramInfo(filePath)
+    if (programInfo) {
+      console.log(
+        `[VideoScanService] 番組情報取得完了: タイトル=${programInfo.title ?? '(なし)'}, 話数=${programInfo.episode ?? '(なし)'}`
+      )
+    } else {
+      console.log(`[VideoScanService] 番組情報は見つかりませんでした`)
+    }
 
     // 3. スキャン結果を構築
+    console.log(`[VideoScanService] スキャン結果を構築中...`)
     const scanResult: VideoScanResult = {
       path: filePath,
       filename,
@@ -131,9 +147,12 @@ export class VideoScanService {
         endTime: chapter.endTime
       }))
     }
+    console.log(`[VideoScanService] スキャン結果の構築完了`)
 
     // 4. DBに保存
+    console.log(`[VideoScanService] DBへの保存を開始...`)
     await this.saveToDatabase(scanResult)
+    console.log(`[VideoScanService] ファイルのスキャン完了: ${filename}`)
 
     return scanResult
   }
@@ -146,9 +165,16 @@ export class VideoScanService {
   static async scanVideoFiles(
     files: DetectedVideoFile[]
   ): Promise<VideoScanResult[]> {
+    console.log(
+      `[VideoScanService] 複数ファイルのスキャンを開始: ${files.length}件`
+    )
     const results: VideoScanResult[] = []
 
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      console.log(
+        `[VideoScanService] [${i + 1}/${files.length}] 処理中: ${file.filename}`
+      )
       try {
         const result = await this.scanVideoFile(
           file.path,
@@ -156,12 +182,21 @@ export class VideoScanService {
           file.filename
         )
         results.push(result)
+        console.log(
+          `[VideoScanService] [${i + 1}/${files.length}] 完了: ${file.filename}`
+        )
       } catch (error) {
         // 個別のファイルのスキャンエラーは記録するが、処理は継続
+        const errorMessage =
+          error instanceof Error ? error.message : String(error)
+        const errorStack = error instanceof Error ? error.stack : undefined
         console.error(
-          `ファイルのスキャン中にエラーが発生しました: ${file.path}`,
-          error
+          `[VideoScanService] [${i + 1}/${files.length}] ファイルのスキャン中にエラーが発生しました: ${file.path}`
         )
+        console.error(`[VideoScanService] エラー内容: ${errorMessage}`)
+        if (errorStack) {
+          console.error(`[VideoScanService] スタックトレース:`, errorStack)
+        }
         // エラーが発生したファイルも結果に含める（メタデータなし）
         results.push({
           path: file.path,
@@ -170,6 +205,13 @@ export class VideoScanService {
         })
       }
     }
+
+    const successCount = results.filter(
+      (r) => r.ffprobeMetadata !== undefined
+    ).length
+    console.log(
+      `[VideoScanService] 複数ファイルのスキャン完了: ${successCount}/${files.length}件成功`
+    )
 
     return results
   }
@@ -183,7 +225,16 @@ export class VideoScanService {
   private static async getFFProbeMetadata(
     filePath: string
   ): Promise<FFProbeResult> {
-    return FFProbeService.analyzeVideo(filePath)
+    try {
+      const result = await FFProbeService.analyzeVideo(filePath)
+      return result
+    } catch (error) {
+      console.error(
+        `[VideoScanService] FFPROBEメタデータ取得エラー: ${filePath}`,
+        error
+      )
+      throw error
+    }
   }
 
   /**
@@ -194,7 +245,17 @@ export class VideoScanService {
   private static async getProgramInfo(
     filePath: string
   ): Promise<ProgramInfo | undefined> {
-    return ProgramInfoService.getProgramInfo(filePath)
+    try {
+      const result = await ProgramInfoService.getProgramInfo(filePath)
+      return result
+    } catch (error) {
+      console.warn(
+        `[VideoScanService] 番組情報取得エラー（続行）: ${filePath}`,
+        error
+      )
+      // 番組情報の取得エラーは致命的ではないため、undefinedを返して続行
+      return undefined
+    }
   }
 
 
@@ -206,7 +267,27 @@ export class VideoScanService {
   private static async saveToDatabase(
     result: VideoScanResult
   ): Promise<void> {
-    await VideoRepository.saveScanResult(result)
+    console.log(
+      `[VideoScanService] DB保存開始: ${result.filename} (パス: ${result.path})`
+    )
+    try {
+      const videoId = await VideoRepository.saveScanResult(result)
+      console.log(
+        `[VideoScanService] DBへの保存が完了しました: ${result.filename} (Video ID: ${videoId})`
+      )
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error)
+      const errorStack = error instanceof Error ? error.stack : undefined
+      console.error(
+        `[VideoScanService] DBへの保存に失敗しました: ${result.path}`
+      )
+      console.error(`[VideoScanService] エラー内容: ${errorMessage}`)
+      if (errorStack) {
+        console.error(`[VideoScanService] スタックトレース:`, errorStack)
+      }
+      throw error
+    }
   }
 }
 

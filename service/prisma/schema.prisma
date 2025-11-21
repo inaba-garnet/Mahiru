@@ -2,12 +2,12 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 // ------------------------------------------------------
@@ -63,13 +63,13 @@ model VideoMetadata {
 }
 
 // キーフレーム情報 (ストリームコピー判定用、1動画1レコードに集約)
-// timestamps: キーフレーム位置（秒）配列をJSONとして格納
+// timestamps: キーフレーム位置（秒）配列をJSON文字列として格納
 model Keyframe {
   id         String   @id @default(uuid())
   videoId    String   @unique @map("video_id")
   video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
 
-  timestamps Json     // キーフレーム位置リスト（秒単位, float[]）
+  timestamps String   // キーフレーム位置リスト（秒単位, float[]）をJSON文字列として格納
 
   updatedAt  DateTime @updatedAt @map("updated_at")
 
